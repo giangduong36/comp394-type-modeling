@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 
-from .types import Type
+from .types import Type, NoSuchMethod
+import types
 
 
 class Expression(object):
@@ -14,15 +15,6 @@ class Expression(object):
         Returns the compile-time type of this expression, i.e. the most specific type that describes
         all the possible values it could take on at runtime. Subclasses must implement this method.
         """
-        # print(Type(self).is_subtype_of(Type(Variable)))
-        # # print()
-        # # print (Type(selfself).is_subtype_of(Variable))
-        # # if hasattr(self, "declared_type"):
-        # #     return self.declared_type
-        # # if hasattr(self, "type"):
-        # #     return self.type
-        # # else:
-        # #     return Type.null
         raise NotImplementedError(type(self).__name__ + " must implement static_type()")
 
     def check_types(self):
@@ -37,8 +29,9 @@ class Expression(object):
 class Variable(Expression):
     """ An expression that reads the value of a variable, e.g. `x` in the expression `x + 5`.
     """
+
     def __init__(self, name, declared_type):
-        self.name = name                    #: The name of the variable
+        self.name = name  #: The name of the variable
         self.declared_type = declared_type  #: The declared type of the variable (Type)
 
     def static_type(self):
@@ -51,9 +44,10 @@ class Variable(Expression):
 class Literal(Expression):
     """ A literal value entered in the code, e.g. `5` in the expression `x + 5`.
     """
+
     def __init__(self, value, type):
         self.value = value  #: The literal value, as a string
-        self.type = type    #: The type of the literal (Type)
+        self.type = type  #: The type of the literal (Type)
 
     def static_type(self):
         return self.type
@@ -74,50 +68,100 @@ class MethodCall(Expression):
     """
     A Java method invocation, i.e. `foo.bar(0, 1, 2)`.
     """
+
     def __init__(self, receiver, method_name, *args):
         self.receiver = receiver
-        self.receiver = receiver        #: The object whose method we are calling (Expression)
+        self.receiver = receiver  #: The object whose method we are calling (Expression)
         self.method_name = method_name  #: The name of the method to call (String)
-        self.args = args                #: The method arguments (list of Expressions)
+        self.args = args  #: The method arguments (list of Expressions)
 
     def static_type(self):
         return self.receiver.static_type().method_named(self.method_name).return_type
 
     def check_types(self):
+        # Nonexistent methods for special types (Avoid NoSuchMethod raised by method_named function)
+        excludes = [Type.void, Type.int, Type.double, Type.null]
+        if self.receiver.static_type() in excludes:
+            raise JavaTypeError("Type {0} does not have methods".format(self.receiver.static_type().name))
 
-
-        print(self.receiver.static_type())
-        # Nonexistent method
+        # Nonexistent methods
         try:
             self.receiver.static_type().method_named(self.method_name)
-        except KeyError:
+        except NoSuchMethod:
             raise NoSuchMethod(
                 "{0} has no method named {1}".format(
                     self.receiver.static_type().name,
                     self.method_name)
             )
 
-        # Too many arguments
-        if len(self.args) != len(self.receiver.static_type().method_named(self.method_name).argument_types):
+        # Too many/few arguments
+        expected_types = self.receiver.static_type().method_named(self.method_name).argument_types
+        args = [x.static_type() for x in self.args]
+        if len(expected_types) != len(args):
             raise JavaTypeError(
                 "Wrong number of arguments for {0}.{1}(): expected {2}, got {3}".format(
                     self.receiver.static_type().name,
                     self.method_name,
-                    len(self.receiver.static_type().method_named(self.method_name).argument_types),
-                    len(self.args))
+                    len(expected_types),
+                    len(args))
             )
+
+        # Wrong argument type
+        for i in range(len(expected_types)):
+            if not args[i].is_subtype_of(expected_types[i]):
+                raise JavaTypeError(
+                    "{0}.{1}() expects arguments of type {2}, but got {3}".format(
+                        self.receiver.static_type().name,
+                        self.method_name,
+                        names(expected_types),
+                        names(args))
+                )
+
+        # Deep expression
+        for arg in self.args:
+            arg.check_types()
 
 
 class ConstructorCall(Expression):
     """
     A Java object instantiation, i.e. `new Foo(0, 1, 2)`.
     """
+
     def __init__(self, instantiated_type, *args):
         self.instantiated_type = instantiated_type  #: The type to instantiate (Type)
-        self.args = args                            #: Constructor arguments (list of Expressions)
+        self.args = args  #: Constructor arguments (list of Expressions)
 
     def static_type(self):
         return self.instantiated_type
+
+    def check_types(self):
+
+        # Cannot instantiate primitives
+        excludes = [Type.void, Type.int, Type.double, Type.null]
+        if self.instantiated_type in excludes:
+            raise JavaTypeError("Type {0} is not instantiable".format(self.instantiated_type.name))
+
+        expected_types = self.instantiated_type.constructor.argument_types
+        args = [x.static_type() for x in self.args]
+
+        # Wrong number of arguments
+        if len(args) != len(expected_types):
+            raise JavaTypeError(
+                "Wrong number of arguments for {0} constructor: expected {1}, got {2}".format(
+                    self.instantiated_type.name,
+                    len(expected_types),
+                    len(args)))
+
+        # Wrong argument types
+        if args != expected_types:
+            raise JavaTypeError("{0} constructor expects arguments of type {1}, but got {2}".format(
+                self.instantiated_type.name,
+                names(expected_types),
+                names(args)))
+
+        # Deep expression
+        for arg in self.args:
+            arg.check_types()
 
 
 class JavaTypeError(Exception):
@@ -125,11 +169,6 @@ class JavaTypeError(Exception):
     """
     pass
 
-
-class NoSuchMethod(Exception):
-    """ Indicates a compile-time type error in an expression.
-    """
-    pass
 
 def names(named_things):
     """ Helper for formatting pretty error messages
