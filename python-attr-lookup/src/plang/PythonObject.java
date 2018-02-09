@@ -10,7 +10,7 @@ import java.util.Map;
  * The runtime state of an object in Python.
  */
 public class PythonObject {
-    private final Map<String,PythonObject> attrs = new HashMap<>();
+    private final Map<String, PythonObject> attrs = new HashMap<>();
     private final PythonType type;
     private List<PythonObject> mro;
 
@@ -20,7 +20,7 @@ public class PythonObject {
 
     /**
      * The Python type (i.e. class) of this object.
-     *
+     * <p>
      * May be null if this object is itself a class. This is a simplification for this assignment;
      * in actual Python, _all_ objects have types, and the type of a class is `type`. That is itself
      * a class, so the type of `type` is `type`. Phew! Thank goodness we’re ignoring that.
@@ -32,16 +32,16 @@ public class PythonObject {
     /**
      * Return the list of objects we should search when asked for a given attribute, in the order
      * we should search them.
-     *
+     * <p>
      * The real Python implementation of the MRO is substantially more complicated, because
      * (1) Python supports multiple inheritance (i.e. classes can have multiple base classes), and
      * (2) the base of `type` is `object`, and the type of `object` is `type`, which creates a
-     *     circular reference that Python resolves by special-casing both `object` and `type`.
-     *
+     * circular reference that Python resolves by special-casing both `object` and `type`.
+     * <p>
      * Once again, hooray for not having to deal with that.
      */
     public List<PythonObject> getMRO() {
-        if(mro == null)
+        if (mro == null)
             mro = Collections.unmodifiableList(buildMRO());
         return mro;
     }
@@ -51,7 +51,11 @@ public class PythonObject {
      * result (i.e. it remembers the list buildMRO() returned and keeps returning it).
      */
     protected List<PythonObject> buildMRO() {
-        throw new UnsupportedOperationException("not implemented yet");
+        mro = new ArrayList<>();
+        mro.add(this);
+        mro.addAll(type.getMRO());
+        return mro;
+//        throw new UnsupportedOperationException("not implemented yet");
     }
 
     /**
@@ -62,7 +66,14 @@ public class PythonObject {
      * @throws PythonAttributeException When there is no attribute on this object with that name.
      */
     public final PythonObject get(String attrName) throws PythonAttributeException {
-        throw new UnsupportedOperationException("not implemented yet");
+        for (PythonObject i : this.getMRO()) {
+            if (i.attrs.containsKey(attrName)) {
+                return i.attrs.get(attrName);
+            }
+        }
+        throw new PythonAttributeException(this, attrName);
+
+//        throw new UnsupportedOperationException("not implemented yet");
     }
 
     /**
@@ -71,10 +82,11 @@ public class PythonObject {
      * resolution order.
      *
      * @param attrName The name of the attribute to set
-     * @param value Its new value
+     * @param value    Its new value
      */
     public final void set(String attrName, PythonObject value) {
-        throw new UnsupportedOperationException("not implemented yet");
+        attrs.put(attrName, value);
+//        throw new UnsupportedOperationException("not implemented yet");
     }
 
     @Override
