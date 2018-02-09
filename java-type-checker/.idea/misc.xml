@@ -12,5 +12,5 @@
       <entry name="!?*.clj" />
     </wildcardResourcePatterns>
   </component>
-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3" project-jdk-type="Python SDK" />
+  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.6.0 (~/anaconda3/bin/python)" project-jdk-type="Python SDK" />
 </project>
