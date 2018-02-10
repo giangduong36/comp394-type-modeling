@@ -79,8 +79,12 @@ class MethodCall(Expression):
         return self.receiver.static_type().method_named(self.method_name).return_type
 
     def check_types(self):
+
         # Nonexistent methods for special types (Avoid NoSuchMethod raised by method_named function)
-        excludes = [Type.void, Type.int, Type.double, Type.null]
+        if self.receiver.static_type() == Type.null:
+            raise NoSuchMethod("Cannot invoke method {}() on null".format(self.method_name))
+
+        excludes = [Type.void, Type.int, Type.double]
         if self.receiver.static_type() in excludes:
             raise JavaTypeError("Type {0} does not have methods".format(self.receiver.static_type().name))
 
@@ -106,9 +110,10 @@ class MethodCall(Expression):
                     len(args))
             )
 
-        # Wrong argument type
+        # Wrong argument type (also check for null)
+
         for i in range(len(expected_types)):
-            if not args[i].is_subtype_of(expected_types[i]):
+            if (not args[i].is_subtype_of(expected_types[i])) or (args[i] == Type.null and expected_types[i] in excludes):
                 raise JavaTypeError(
                     "{0}.{1}() expects arguments of type {2}, but got {3}".format(
                         self.receiver.static_type().name,
@@ -120,6 +125,7 @@ class MethodCall(Expression):
         # Deep expression
         for arg in self.args:
             arg.check_types()
+
 
 
 class ConstructorCall(Expression):
@@ -135,6 +141,10 @@ class ConstructorCall(Expression):
         return self.instantiated_type
 
     def check_types(self):
+
+        # Deep expression
+        for arg in self.args:
+            arg.check_types()
 
         # Cannot instantiate primitives
         excludes = [Type.void, Type.int, Type.double, Type.null]
@@ -152,16 +162,16 @@ class ConstructorCall(Expression):
                     len(expected_types),
                     len(args)))
 
-        # Wrong argument types
-        if args != expected_types:
+        # Wrong argument types (also check for null)
+        checkList = [True for i, j in zip(args, expected_types) if
+                     (i == j or (i == Type.null and j not in excludes))]
+
+        if len(checkList) != len(args):
             raise JavaTypeError("{0} constructor expects arguments of type {1}, but got {2}".format(
                 self.instantiated_type.name,
                 names(expected_types),
                 names(args)))
 
-        # Deep expression
-        for arg in self.args:
-            arg.check_types()
 
 
 class JavaTypeError(Exception):

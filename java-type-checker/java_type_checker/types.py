@@ -12,6 +12,9 @@ class Type(object):
     def is_subtype_of(self, other):
         """ True if this type can be used where the other type is expected.
         """
+        if self.name == 'null':
+            return True
+
         if other == self:
             return True
 
@@ -24,7 +27,6 @@ class Type(object):
                 newList.extend(i.direct_supertypes)
             super = newList
         return False
-        # TODO: implement
 
     def is_supertype_of(self, other):
         """ Convenience counterpart to is_subtype_of().
@@ -83,6 +85,8 @@ class NullType(Type):
     """
     def __init__(self):
         super().__init__("null")
+        self.name = "null"
+        self.is_instantiable = False
 
 
 class NoSuchMethod(Exception):
